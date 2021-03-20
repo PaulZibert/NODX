@@ -6,7 +6,7 @@ export const WindowBrowser = {
     el:null,
     node:new Node('node'),
     open(node,save=true){
-        this.node.set(node);
+        this.node.update(node);
         /**@type {HTMLElement} */
         const page = node.find(Page)
         if(this.el){this.el.replaceWith(page);}
@@ -37,10 +37,17 @@ export class Browser{
     node = new Node('node',null,null)
     open(node,save=true){           
         if(this.node.target&&save){this.hist.push(this.node.target)}
-        this.node.set(node)
+        this.node.update(node)
         const page = node.find(Page)
         this.el.replaceWith(page);
         this.el = page;
+        if(node.parent){
+            node.parent.on('childChanged',this.el,(name)=>{
+                if(name==node.name){
+                    this.open(node.parent.getChild(name),false)
+                }
+            })
+        }
         page.addEventListener('go',(e)=>{this.open(e.detail)})
     }
     back(){
@@ -86,12 +93,12 @@ function ToolBar(node){
             ondrop(ev){
                 const path = ev.dataTransfer.getData('node')
                 const node = Node.fromPath(path)
-                node.parent?.deleteChild(node.name)
+                node.parent?.del(node.name)
             },
             onclick(){
                 if(mouseBufer.input){mouseBufer.setInput('');return}
                 if(node.parent&&confirm(`delete ${node.target.path}`)){
-                    node.parent.deleteChild(node.name)
+                    node.parent.del(node.name)
                 }
             }
         })

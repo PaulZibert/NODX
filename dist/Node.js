@@ -1,12 +1,15 @@
+import * as code from "./CodeManager.js"
 export const Proto = new Map()
 export function $(str,...args){
     var path = ''
-    for(const i in args){
+    for(let i = 0;i<args.length;i++){
         path += str[i]+args[i]
     }
     path+=str[args.length]
+    console.log()
     return Node.fromPath(path)
 }
+window.$ = $
 Function.prototype.mixin = function(mx){Object.assign(this.prototype,mx)}
 var idscounter = 0
 const Primitives = ['string','boolean','number']
@@ -43,7 +46,6 @@ export class MouseBufer extends EventEmitter{
     input=""
     /**@type {Array<(mb:MouseBufer)=>null>}*/
     static handlers = []
-    variants = []
     index = 0
     setInput(val){this.input = val;this.changed();this.index=0}
     setValue(value,name){this.input = name||"";this.variants.push({value});this.emit('changed',this,this)}
@@ -74,6 +76,7 @@ export class MouseBufer extends EventEmitter{
     }
     constructor(){
         super()
+        this.variants = []
         addEventListener('keydown',(ev)=>{
             const isINPUT = ["INPUT","TEXTAREA"].includes(ev.target.tagName.toUpperCase())
             const isEDITABLE = ev.target.hasAttribute('contenteditable')
@@ -98,7 +101,7 @@ export class MouseBufer extends EventEmitter{
                 this.setInput('')
             }else{console.log(ev.key)}
         })
-    }
+    }variants
 }
 export default class Node extends EventEmitter{
     static count = 0
@@ -111,10 +114,22 @@ export default class Node extends EventEmitter{
         if(target!=null){this.target = target}
         const proto = this.find(Proto)
         if(proto){
-            proto.__proto__ = Node.prototype
             this.__proto__ = proto
             if(proto.hasOwnProperty('constructor')){proto.constructor.apply(this)}
         } 
+    }
+    /**@param {Node} proto */
+    static extends(type,proto,ext = Object){
+        const proto2 = Proto.get(ext)
+        if(proto2){
+            for(const prop in proto2){
+                if(!(prop in proto)){
+                    proto[prop] = proto2[prop]
+                }
+            }
+        }
+        proto.__proto__ = Node.prototype
+        Proto.set(type,proto)
     }
     childs={}
     /**@returns {Node} */
@@ -133,15 +148,6 @@ export default class Node extends EventEmitter{
         }
         return node
     }
-    /** call changed for this node and all parents */
-    static update(node){
-        var prew = null
-        while(node){
-            node.changed(prew)
-            prew = node;
-            node = node.parent;
-        }
-    }
     get path(){
         const names = []
         var node = this;
@@ -151,40 +157,36 @@ export default class Node extends EventEmitter{
         }
         return names.length>1?names.join('/'):'/'
     }
-    find(attr,...args){
-        const getFromMap = (key)=>{
-            const ret = attr.get(key)
-            if(typeof ret =="function"&&!attr.canBeFn){
-                return ret.apply(this,args)
-            }
-            return ret
+    *getTypes(){
+        let obj = this.target
+        if(obj==null)return obj;
+        while(obj!=null){
+            yield obj.constructor
+            obj = obj.__proto__
         }
-        if(this.m&&this.m.has(attr)){return this.m.get(attr)}
-        if(attr instanceof Map){
-            if(this.target==null){
-                if(attr.has(this.target)){return getFromMap(this.target)}
-            }else{
-                let obj = this.target
-                while(obj!=null){
-                    const cls = obj.constructor
-                    if(cls&&attr.has(cls)){return getFromMap(cls)}
-                    obj = obj.__proto__
-                }
+    }
+    /**@param {Map} map */
+    find(map,...args){
+        for(const type of this.getTypes()){
+            if(map.has(type)){
+                const ret = map.get(type)
+                if(typeof ret =="function"&&!map.canBeFn){
+                    return ret.apply(this,args)
+                }else{return ret}   
             }
-            return getFromMap(Object)
         }
-        return this[attr]
     }
-    changed(child){
-        if(!child&&this.parent){this.parent.target[this.name] = this.target}
+    get(name){}
+    childNames(){
+        return Object.getOwnPropertyNames(this.childs)
     }
-    get(name){
-        return this.target[name]
-    }
-    getChilds(){
-        return [...Object.getOwnPropertyNames(this.target),'__proto__']
+    get self(){
+        const value = new Node('~',this,this)
+        Object.defineProperty(this,'self',{value});
+        return value; 
     }
     getChild(name){
+        if(name=="~"){return this.self}
         if(Object.hasOwnProperty.apply(this.childs,[name])){
             const savedNode = this.childs[name]
             if(Primitives.includes(typeof savedNode.target)){
@@ -199,30 +201,33 @@ export default class Node extends EventEmitter{
         this.childs[name] = childNode
         return childNode;
     }
-    set(val,caller){
+    changed(){this.parent?.changed(this)}
+    update(val,caller){
         this.target = val;
-        Node.update(this)
+        code.initFn.push(new code.Set(this.parent,this.name,this))
         this.emit('changed',caller)
+        this.changed()
     }
-    setChild(name,node){// TODO dont create new Node
+    set(name,node){// TODO dont create new Node
         const newNode = new Node(name,this,node.target)
+        code.initFn.push(new code.Set(this,name,node))
         this.childs[name] = newNode
-        Node.update(newNode)// dont set value to Storage
+        this.changed()
         this.emit('childChanged',name)
         return newNode
     }
     add(name,val=null){
-        this.target[name] = val;
-        Node.update(this.getChild(name))
+        this.changed()
         this.emit('childChanged',name)
         this.emit('changed',null)
+        code.initFn.push(new code.Add(this,name,val))
     }
-    deleteChild(name){// TODO delete child
-        delete this.target[name]
+    del(name){// TODO delete child
         delete this.childs[name]
-        // TODO #ifbugs Node.update(this)
+        this.changed()
         this.emit('childRemoved',name)
         this.emit('changed')
+        code.initFn.push(new code.Del(this,name))
     }
 }
 MouseBufer.handlers.push(async (m)=>{
@@ -237,7 +242,7 @@ MouseBufer.handlers.push(async (m)=>{
             return}
     }
     console.log
-    const childNames = await node.getChilds()
+    const childNames = await node.childNames()
     for(const childName of childNames){
         if(childName.startsWith(last)||childName==last)
         m.variants.push({
@@ -249,4 +254,21 @@ MouseBufer.handlers.push(async (m)=>{
 })
 export const mouseBufer = new MouseBufer()
 window.Node=Node
+window.mouse = mouseBufer
 Node.mixin(EventEmitter)
+Node.extends(Object,{
+    childNames(){return [...Object.getOwnPropertyNames(this.target),'__proto__']},
+    update(val,caller){
+        if(this.parent?.target){
+            this.parent.target[this.name] = val}
+        super.update(val,caller)
+    },
+    set(name,node){this.target[name] = node.target;super.set(name,node)},
+    add(name,val){this.target[name] = val;super.add(name,val)},
+    del(name){delete this.target[name];super.del(name)},
+    get(name){try{return this.target[name]}catch(e){return e}},
+})
+Node.extends(Array,{
+    childNames(){const names = Object.getOwnPropertyNames(this.target);names.pop();return names},
+    del(name){this.target.splice(parseInt(name),1);super.del(name)}
+})

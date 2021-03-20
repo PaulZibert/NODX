@@ -1,8 +1,7 @@
-import {Proto} from "./Node.js"
 import Node from "./Node.js"
 import {Icons,Inline,Page,e} from "./BaseGUI.js"
 //#region localStorage
-Proto.set(Storage,{
+Node.extends(Storage,{
     get(name){
         if(name!="length"&&name!='__proto__'){
             try{
@@ -15,6 +14,10 @@ Proto.set(Storage,{
     changed(child){
         if(!child)return
         this.target[child.name] = JSON.stringify(child.target)
+    },
+    set(name,node){
+        this.target[name] = JSON.stringify(node.target)
+        super.set(name,node)
     }
 })
 async function getDBVersion(name){
@@ -23,8 +26,8 @@ async function getDBVersion(name){
         if(db.name==name){return db.version}
     }
 }
-Proto.set(IDBFactory,{
-    async getChilds(){
+Node.extends(IDBFactory,{
+    async childNames(){
         const dbs = await indexedDB.databases()
         return dbs.map(d=>d.name)
     },
@@ -50,15 +53,15 @@ Proto.set(IDBFactory,{
             this.emit('changed')
         }
     },
-    deleteChild(key){
+    del(key){
          const req = indexedDB.deleteDatabase(key);
         delete this.childs[key]
         this.emit('childRemoved',key)
         this.emit('changed')       
     }
 })
-Proto.set(IDBDatabase,{
-    getChilds(){
+Node.extends(IDBDatabase,{
+    childNames(){
         return this.target.objectStoreNames
     },
     async add(name,val){
@@ -75,8 +78,8 @@ Proto.set(IDBDatabase,{
         return this.target.transaction(name,'readwrite').objectStore(name)
     }
 })
-Proto.set(IDBObjectStore,{
-    getChilds(){
+Node.extends(IDBObjectStore,{
+    childNames(){
         return new Promise((ok)=>{
             /**@type {IDBDatabase} */
             const db = this.target.transaction.db
@@ -106,7 +109,7 @@ Proto.set(IDBObjectStore,{
             req.onsuccess = ()=>{ok(req.result)}
         })
     },
-    deleteChild(key){
+    del(key){
         /**@type {IDBDatabase} */
         const db = this.target.transaction.db
         const store = db.transaction(this.name,'readwrite').objectStore(this.name)
@@ -115,15 +118,15 @@ Proto.set(IDBObjectStore,{
         this.emit('childRemoved',key)
         this.emit('changed')
     },
-    changed(n){
-        if(!n)return
+    changed(child){
+        if(!child)return
         /**@type {IDBDatabase} */
         const db = this.target.transaction.db
         const store = db.transaction(this.name,'readwrite').objectStore(this.name)
         store.put(n.target,n.name)
     }
 })
-Proto.set(Promise,{
+Node.extends(Promise,{
     async constructor(){
         const result = await this.target
         const resNode = new Node(this.name,this.parent,result)

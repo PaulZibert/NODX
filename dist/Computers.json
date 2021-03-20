@@ -1,0 +1,38 @@
+{
+    "lesson 1":[
+        {
+            "model":"ASUS Prime",
+            "Mainboard":"B550M-K yATX",
+            "Processor":"AMD",
+            "Festspeicher":"4*SATA",
+            "Anschlüsse":["USB-A 3.2","HDMI","VGA","GLAN"],
+            "Netzteil":{"Belastung":"?","Wirkungsgrad":"?"}
+        },
+        {
+            "model":"",
+            "Processor":"Sockel MGA 1200, 12Mb cache",
+            "Arbeitsspeicher":"DDR4 4GB",
+            "Festspeicher":"",
+            "Graphikkatre":"UHD630",
+            "Anschlüsse":["USB-A 3.2"],
+            "Netzteil":{"Belastung":"65W","Wirkungsgrad":"?"}
+        },
+        {
+            "model":"",
+            "Processor":"Core i5 6 Cores 12 Threads",
+            "Arbeitsspeicher":"DDR4 4GB",
+            "Festspeicher":"",
+            "Anschlüsse":["USB-A 3.2"],
+            "Netzteil":{"Belastung":"65W","Wirkungsgrad":"?"}
+        }
+    ],
+    "lesson 2":{
+        "Repeater":"Verstärkt Signal, aufbereitet",
+        "Bridge":["Verbindet ein LAN mit anderem LAN",
+            "MAC-Bridge wird eingesetzt um die Last in großen Netzwerken zu vermeiden.Verbindet Netze mit gleichen Zugriffsvervahren.",
+            "LLC-Bridge verbindet Netze mit verschiedenen Zugriffsvervahren."
+        ],
+        "Router":"Verbindet mehrere Netzerke",
+        "Switch":"Verbindet Geräte innerhalb einer LAN"
+    }
+}

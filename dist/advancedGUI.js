@@ -7,7 +7,7 @@ Inline.set(Date,function(){
     const date = this.target
     return e('input',{type:"date",value:date.toISOString().slice(0,10),
         onchange(){
-            node.set(new Date(this.value))
+            node.update(new Date(this.value))
         },
         nodeEvents:{
             changed(){
