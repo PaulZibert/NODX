@@ -1,25 +1,27 @@
+import Node from "./Node.js"
 Array.prototype.last = {last(){return this[this.length-1]}}.last
+export const AsyncFn = (async ()=>{}).constructor
+const saveJS = new Map()
+saveJS.set(Object,function(){return JSON.stringify(this.target)})
+saveJS.set(Array,function(){
+    const arr = this.target
+    return `[${arr.map((e,i)=>this.getChild(i).find(saveJS))}]`
+})
 export class Executable{
     exe(){}
-    save(){}
-    load(obj){}
 }
-export class Function extends Executable{
-    commands = []
-    exe(){
-        for(const cmd of this.commands){
-            cmd.exe()
-        }
+saveJS.set(Executable,function(){
+    const obj = this.target
+    const args = []
+    for(const name of Object.getOwnPropertyNames(obj)){
+        const child = this.getChild(name)
+        args.push(child.find(saveJS))
     }
-    push(cmd){
-        if(cmd instanceof Set){
-            const lastCMD = this.commands.last()
-            if(lastCMD instanceof Set && lastCMD.name==cmd.name&&lastCMD.obj==cmd.obj){
-                this.commands.pop()
-            }
-        }
-        this.commands.push(cmd)
-    }
+    return `new ${obj.constructor.name}(${args.join(',')})`
+})
+export class Link extends Executable{
+    constructor(path){super();this.path = path}
+    exe(){return Node.fromPath(this.path)}
 }
 export class Set extends Executable{
     constructor(obj,name,val){super()
@@ -48,5 +50,28 @@ export class Del extends Executable{
     }
     exe(){this.obj.del(this.name)}
 }
+export class Function extends Executable{
+    constructor(cmds = []){super();this.cmds = cmds}
+    exe(){
+        for(const cmd of this.cmds){
+            cmd.exe()
+        }
+    }
+    push(cls,...args){
+        args = args.map(e=>e instanceof Node?new Link(e.path):e)
+        const cmd = new cls(...args)
+        if(cls == Set){
+            const lastCMD = this.cmds.last()
+            if(lastCMD instanceof Set && lastCMD.name==cmd.name&&lastCMD.obj==cmd.obj){
+                this.cmds.pop()
+            }
+        }
+        this.cmds.push(cmd)
+    }
+}
 export const initFn = new Function()
-window.initFn = initFn
+function genFn(){
+    const fnNode = new Node('',null,initFn)
+    return fnNode.find(saveJS)
+}
+Object.assign(window,{initFn,genFn})

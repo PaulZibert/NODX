@@ -1,6 +1,7 @@
 import {Proto} from "./Node.js"
 import Node from "./Node.js"
-import {Icons,Inline,Page,e} from "./BaseGUI.js"
+import {Icons,Inline,Page} from "./BaseGUI.js"
+import {e} from "./GUICore.js"
 Inline.set(Date,function(){
     const node = this
     /**@type {Date} */

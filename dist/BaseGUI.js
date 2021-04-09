@@ -1,100 +1,16 @@
-import Node, { EventEmitter,mouseBufer,MouseBufer } from "./Node.js"
-import css from "./StyleManager.js"
+import Node, { EventEmitter,mouseBufer,MouseBufer, Proto } from "./Node.js"
+import {css,e,toEl} from "./GUICore.js"
 export const Page = new Map()
 export const Inline = new Map()
 export const Icons = new Map()
 export const Block = new Map()
 export const ToolButtons = new Map()
-Block.canBeFn = true
 export const borderStyle = "solid 2px black"
 //#region utils
-function config(el,_,props){
-	for(const name in props){
-		if(name=="class"){
-			const cls = props.class
-			if(Array.isArray(cls)){
-				for(const name of cls){el.classList.add(name)}
-			}else{el.classList.add(cls)}
-		}else if(name=="style"){
-			const style = props.style;
-			for(const attr in style){
-				el.style[attr] = style[attr]
-			}
-		}else if(name=="attr"){
-			const attrs = props.attr;
-			for(const attr in attrs){
-				el.setAttribute(attr,attrs[attr])
-			}
-		}else if(name=="events"){
-			const evts = props.events;
-			for(const ev in evts){
-				el.addEventListener(ev,evts[ev])
-			}
-		}else{
-			el[name] = props[name]
-		}
-	}
-}
-function EventConfig(el,name,props,args){
-	if(this instanceof EventEmitter){
-		if(props.nodeEvents){
-			const evts = props.nodeEvents;
-			delete props.nodeEvents;
-			for(const name in evts){
-				this.on(name,el,evts[name])
-			}
-		}else if(typeof name =="function"){
-			this.on('changed',el,()=>{
-				el.replaceWith(e(name,{this:this,...props},args))
-			})
-		}
-	}
-}
-const AwaitViewNode = new Node('await',null,null)
-/**@param {String} name @returns {HTMLElement}
-@param {HTMLElement} props
-*/
-export function e(name,props={},...args){
-	/**@type {HTMLElement} */
-	var el;
-	var _this = this
-	if(props.this){_this = props.this;delete props.this}
-	if(typeof name == "function"){
-		el = name.apply(_this,args)
-		if(el instanceof Promise){// TODO delete this tile
-			AwaitViewNode.target = el
-			const tempEl = AwaitViewNode.find(Page)
-			el.then((asyncEl)=>{
-				for(const fn of e.configs){
-					fn.apply(_this,[asyncEl,name,props,args])
-				}
-				tempEl.replaceWith(asyncEl)
-			})
-			return tempEl
-		}
-		else if(!(el instanceof HTMLElement)){el = e('span',{},[el])}
-	}
-	else{
-		el = typeof name == "string"?document.createElement(name):name
-		for(const child of args[0]||[]){
-			if(child instanceof Node){
-				const inline = child.find(Inline)
-				el.append(inline)
-			}else{
-				el.append(child)
-			}
-		}
-	}
-	for(const fn of e.configs){
-		fn.apply(_this,[el,name,props,args])
-	}
-	return el
-}
-e.configs = [EventConfig,config]
-Node.prototype.e = e;
+toEl.types.set(Node,(src,{args})=>src.find(args[0]||Inline))
 export function vport(els){
 	const subEl = Array.isArray(els)?e('div',{},els):els
-	return e('div',{class:"v-port"},[subEl])
+	return e('div',{class:"v-port"},subEl)
 }
 css['.v-port']={position:"relative"}
 css['.v-port>div']={position:"absolute",overflow: "auto",top:0,bottom:0,left:0,right:0,}
@@ -138,11 +54,11 @@ function SearchLine(){
 				if(attr){this.add(attr,val)}
 			}
 		}
-	},['+'])
-	return e('div',{class:"tool-line"},[
+	},'+')
+	return e('div',{class:"tool-line"},
 		$inp,
 		addBtn
-	])
+	)
 }
 css['.tool-line'] = {display:"flex",marginBottom:5}
 css['.tool-line>*'] = {border:borderStyle,fontSize:"1em"}
@@ -152,15 +68,15 @@ const foldingBtn = {
 	/**@param {HTMLElement} line,@param {HTMLElement} btn */
 	click(btn,line){
 		if(!line.hasSubView){
-			const blockFn = this.find(Block)
-			const $block = this.e(blockFn,{
+			const $block = this.e(Block,{
+				class:"block",
+				thisArg:this.parent?.target,
 				style:{borderRight:"2px solid #333",borderLeft:"4px solid black"}
 			})
 			line.after($block)
 			line.expanded = true
 			line.hasSubView = true
 		}else{line.expanded = !line.expanded}
-
 		line.nextSibling.style.display = line.expanded?null:"none"
 		btn.textContent = line.expanded?"ᐁ":"ᐊ"
 	}
@@ -192,7 +108,7 @@ function AttrLineView(node,attr,showName=true){
 	}
 	const toolBar = e('div',{class:"tool-bar"},$toolBtns)   
 	//#endregion
-	const name = e('span',nameProps,[showName?attr+' : ':""])
+	const name = e('span',nameProps,showName?attr+' : ':"")
 	const icon = e(ico,nameProps,child.find(Icons))
 	const lineProps = {
 		class:"attr",
@@ -235,10 +151,11 @@ css['.attr>.tool-bar'] = {position:"absolute",
 css['.attr>.ico-box'] = {marginRight:3}
 /**@param {HTMLElement} $el */
 function addChangeEvents(node,$el,showName=true){
-	node.on('childChanged',$el,async (name)=>{
-		const newEl = AttrLineView(node,name,showName)
+	node.on('changed',$el,async (ev)=>{
+		if(!ev.child||ev.args[0]){return}
+		const newEl = AttrLineView(node,ev.child.name,showName)
 		for(const el of $el.children){
-			if(el.name==name){
+			if(el.name==ev.child.name){
 				if(newEl){
 					el.replaceWith(newEl)
 				}else{
@@ -252,11 +169,12 @@ function addChangeEvents(node,$el,showName=true){
 		}else{
 			$el.append(newEl)
 		}
-	})
-	node.on('childRemoved',$el,(name)=>{
+	},true)
+	node.on('deleted',$el,(ev)=>{
+		if(ev.target!=ev.child){return}
 		for(const el of $el.children){
-			if(el.name==name){$el.removeChild(el)}}
-	})
+			if(el.name==ev.child.name){$el.removeChild(el)}}
+	},true)
 }
 async function BlockObject(){
 	const $attrs = []
@@ -271,11 +189,9 @@ async function BlockObject(){
 }
 function PageObject(){
 	if(!this.target){return "null"}
-	/**@type {HTMLElement} */
-	const blockFn = this.find(Block)
 	return e("div",{class:"object-page"},[
 		this.e(SearchLine),
-		e(vport,{class:'attrs'},this.e(blockFn,{nodeEvents:{}}))
+		e(vport,{class:'attrs'},this.e(Block))
 	])
 	
 }
@@ -312,16 +228,11 @@ function InlineString(){
 	}
 	return e('span',{},['"',this.e(field,{nodeEvents}),'"'])
 }
-Page.set(String,function(){
+Block.set(String,function(){
 	const node = this
-	const nodeEvents = {
-		changed(){
-			this.value = node.target
-		}
-	}
-	return this.e('textarea',{
+	return this.e('textarea',{//TODO ERR doesnt update ERROR 
 		class:"str-inline",
-		nodeEvents,
+		nodeEvents:{changed(){console.log(node);this.value = node.target}},
 		value:this.target,
 		onkeyup(){
 			node.update(this.value,this)
@@ -358,8 +269,8 @@ function InlineNumber(){
 Icons.set(Number,'/icons/number.svg')
 Inline.set(Number,InlineNumber)
 ToolButtons.set(Number,[
-	{ico:"-",click(){this.update(this.target-1)}},
-	{ico:"+",click(){this.update(this.target+1)}},
+	{ico:"-",click(b){this.update(this.target-1,b)}},
+	{ico:"+",click(b){this.update(this.target+1,b)}},
 ])
 MouseBufer.handlers.push((m)=>{
 	const number = parseFloat(m.input)
@@ -376,8 +287,12 @@ MouseBufer.handlers.push((m)=>{
 //#region func
 Icons.set(Function,function(){return "/icons/"+(this.target.prototype?"class.svg":"function.svg")})
 Inline.set(Function,function(){return e('span',{},[`${this.target.name}(${this.target.length})`])})
-function exeFn() {
-	const caller = this.parent.target
+function exeFn(btn,line) {
+	var caller = this.parent.target
+	while(line){
+		if(line.thisArg){caller = line.thisArg;break}
+		line = line.parentNode
+	}
 	const fn = this.target
 	var result
 	console.log(this.args)
@@ -393,7 +308,6 @@ Block.set(Function,function(){
 	const $exe = e('button',{onclick:exeFn.bind(this)},['EXE'])
 	return e('div',{},[$args.e($args.find(Block)),$exe])
 })
-console.log(name)
 ToolButtons.set(Function,[
 	{ico:"▶",click:exeFn},
 ])
@@ -445,9 +359,8 @@ Block.set(Array,function BlockArray(){
 	return $el
 })
 Page.set(Array,function PageArray(){
-	const blockFn = this.find(Block)
 	return e("div",{class:"object-page"},[
-		e(vport,{class:'attrs'},this.e(blockFn,{nodeEvents:{}}))
+		e(vport,{class:'attrs'},this.e(Block))
 	])
 })
 css['.t-center'] = {textAlign:"center"}

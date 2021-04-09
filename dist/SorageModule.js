@@ -1,5 +1,6 @@
 import Node from "./Node.js"
-import {Icons,Inline,Page,e} from "./BaseGUI.js"
+import {Icons,Inline,Page} from "./BaseGUI.js"
+import {e,toEl} from "./GUICore.js"
 //#region localStorage
 Node.extends(Storage,{
     get(name){
@@ -11,9 +12,10 @@ Node.extends(Storage,{
             }
         }else{return this.target[name]}
     },
-    changed(child){
-        if(!child)return
-        this.target[child.name] = JSON.stringify(child.target)
+    on_changed(ev){
+        if(ev.target==this){return}
+        console.log(ev)
+        this.target[ev.child.name] = JSON.stringify(ev.child.target)
     },
     set(name,node){
         this.target[name] = JSON.stringify(node.target)
@@ -48,16 +50,11 @@ Node.extends(IDBFactory,{
     },
     add(key,val){
         const req = indexedDB.open(key,1)
-        req.onsuccess = ()=>{
-            this.emit('childChanged',key)
-            this.emit('changed')
-        }
+        req.onsuccess = ()=>{super.add(key,val)}
     },
     del(key){
-         const req = indexedDB.deleteDatabase(key);
-        delete this.childs[key]
-        this.emit('childRemoved',key)
-        this.emit('changed')       
+        indexedDB.deleteDatabase(key);
+        super.del(key)     
     }
 })
 Node.extends(IDBDatabase,{
@@ -71,8 +68,14 @@ Node.extends(IDBDatabase,{
             const db = ev.target.result
             db.createObjectStore(name)
         })
-        this.emit('childChanged',name)
-        this.parent.emit('childChanged',this.name)
+        super.add(name,val)
+    },
+    async del(name){
+        this.target.close()
+        this.target = await this.parent.get(this.name,(e)=>{
+            e.target.result.deleteObjectStore(name)
+        })
+        super.del(name)
     },
     get(name){
         return this.target.transaction(name,'readwrite').objectStore(name)
@@ -118,21 +121,21 @@ Node.extends(IDBObjectStore,{
         this.emit('childRemoved',key)
         this.emit('changed')
     },
-    changed(child){
-        if(!child)return
+    on_changed(ev){
+        if(!ev.child)return
         /**@type {IDBDatabase} */
         const db = this.target.transaction.db
         const store = db.transaction(this.name,'readwrite').objectStore(this.name)
-        store.put(n.target,n.name)
+        store.put(ev.child.target,ev.child.name)
     }
 })
 Node.extends(Promise,{
     async constructor(){
         const result = await this.target
-        const resNode = new Node(this.name,this.parent,result)
-        resNode.childs = this.childs
-        this.parent.childs[this.name] = resNode
-        this.parent.emit('childChanged',this.name)
+        const replaceNode = new Node(this.name,this.parent,result)
+        replaceNode.childs = this.childs
+        this.parent.childs[this.name] = replaceNode
+        this.emit('changed',[],{pretend:true})
     },
     async get(name){
         const result = await this.target;
@@ -144,3 +147,8 @@ Inline.set(Promise,function(){
     return e('span',{},['wait'])
 })
 Page.set(Promise,()=>e('div',{},['loading page...']))
+toEl.types.set(Promise,(prom,p)=>{
+	const tempEl = Node.find(prom,Inline);
+	prom.then((res)=>{tempEl.replaceWith(toEl(res,p))})
+	return tempEl
+})

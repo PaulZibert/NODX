@@ -2,8 +2,7 @@ import Node from './Node.js'
 import {Dir} from "./server.js"
 import defEnv from "./Enviroment.js"
 import "./SorageModule.js"
-import "./advancedGUI.js"
-import {update as styleUpdate} from "./StyleManager.js"
+import {updateStyle} from "./GUICore.js"
 var root = {
     window,
     autor:{name:"Paul",age:20},
@@ -15,5 +14,5 @@ var root = {
 }
 Node.root = new Node('',null,root)
 document.body.append(defEnv())
-styleUpdate()
+updateStyle()
 window.Node = Node

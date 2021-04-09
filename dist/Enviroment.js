@@ -1,7 +1,7 @@
-import {e,Page,ico,vport,borderStyle,Icons,Inline} from "./BaseGUI.js"
-import css from "./StyleManager.js" 
+import {Page,ico,vport,borderStyle,Icons,Inline} from "./BaseGUI.js"
+import "./advancedGUI.js"
+import {e,css} from "./GUICore.js" 
 import Node,{ mouseBufer} from "./Node.js"
-import {EventEmitter}from "./Node.js"
 export const WindowBrowser = {
     el:null,
     node:new Node('node'),
@@ -12,13 +12,11 @@ export const WindowBrowser = {
         if(this.el){this.el.replaceWith(page);}
         this.el = page;
         if(save){history.pushState(null,node.name,node.path)}
-        if(node.parent){
-            node.parent.on('childChanged',this.el,(name)=>{
-                if(name==node.name){
-                    this.open(node.parent.getChild(name),false)
-                }
-            })
-        }
+        node.on('changed',this.el,(ev)=>{
+            if(ev.target==node&&ev.args[0]==null&&node.parent){
+                this.open(node.parent.getChild(node.name),false)
+            }
+        },true)
         page.addEventListener('go',(e)=>{this.open(e.detail)})
     },
     init(){
@@ -35,19 +33,17 @@ export class Browser{
     hist = []
     el=e('div');
     node = new Node('node',null,null)
-    open(node,save=true){           
+    open(node,save=true){
         if(this.node.target&&save){this.hist.push(this.node.target)}
         this.node.update(node)
         const page = node.find(Page)
         this.el.replaceWith(page);
         this.el = page;
-        if(node.parent){
-            node.parent.on('childChanged',this.el,(name)=>{
-                if(name==node.name){
-                    this.open(node.parent.getChild(name),false)
-                }
-            })
-        }
+        node.on('changed',this.el,(ev)=>{
+            if(ev.target==node&&ev.args[0]==null&&node.parent){
+                this.open(node.parent.getChild(node.name),false)
+            }
+        },true)
         page.addEventListener('go',(e)=>{this.open(e.detail)})
     }
     back(){
@@ -70,7 +66,7 @@ function MouseBuferView(mb){
         mouseEl.style.left = ev.x+10
         mouseEl.style.top = ev.y+10
     })
-    return e(mouseEl,{},[e(contentView,{this:mb})])
+    return e(mouseEl,{},[mb.e(contentView,{sync_changes:true})])
 }
 css['.mouse-bufer'] = {
     position:"fixed",
@@ -103,7 +99,7 @@ function ToolBar(node){
             }
         })
     ])
-    return e('div',{class:"top-bar"},[node.e(nodeInfo),tools])
+    return e('div',{class:"top-bar"},[node.e(nodeInfo,{sync_changes:true}),tools])
 }
 css['.top-bar'] = {fontSize:30,
     borderBottom:borderStyle,
@@ -122,10 +118,9 @@ export default function env(){
     sideBrowser.open(Node.root)
     const sidePage = e('div',{class:"sidepage"},[sidenav,sideBrowser.el])
     const Content = e('main',{},[WindowBrowser.init(),sidePage])
-    return e('div',{class:"env",spage:sideBrowser},[Bufer,ToolBar(WindowBrowser.node),e(vport,{style:{height:"100%"}},[Content])])
+    return e('div',{class:"env",spage:sideBrowser},Bufer,ToolBar(WindowBrowser.node),e(vport,{style:{height:"100%"}},[Content]))
 }
 css['.env'] = {display:"flex",flexDirection:"column",height:"100%",maxWidth:800,width:800}
 css['.env main'] = {display:"flex",height:"100%"}
 css['.env main>*'] = {width:"100%"}
 css['.env main>.sidepage'] = Object.assign({marginLeft:5},css['.object-page'])
-

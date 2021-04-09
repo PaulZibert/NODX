@@ -1,4 +1,5 @@
 import * as code from "./CodeManager.js"
+import {e, toEl,elConfig} from "./GUICore.js"
 export const Proto = new Map()
 export function $(str,...args){
     var path = ''
@@ -14,26 +15,42 @@ Function.prototype.mixin = function(mx){Object.assign(this.prototype,mx)}
 var idscounter = 0
 const Primitives = ['string','boolean','number']
 export class EventEmitter{
-    on(name,owner,fn){
+    on(name,owner,fn,listenChilds){
+        if(owner instanceof Function){fn = owner;listenChilds = fn}
         if(!this._events){this._events = {}}
         if(!this._events[name]){this._events[name] = new Map()}
         if(owner instanceof HTMLElement && !owner.isConnected){
-            document.body.append(owner)
+            document.body.append(owner)//TODO Hide element
         }
+        if(listenChilds){fn.listenChilds = true}
         this._events[name].set(owner,fn)
     }
-    emit(name,...args){
+    _emit(ev){
         /**@type {Map} */
-        const map = this._events?.[name]
-        if(!map){return}
-        const owners = Array.from(map.keys())
-        for(const owner of owners){
-            if(owner instanceof HTMLElement && !owner.isConnected){
-                map.delete(owner);
-                continue
+        const map = this._events?.[ev.name]
+        if(map){
+            const owners = Array.from(map.keys())
+            for(const owner of owners){
+                if(owner.isConnected==false){
+                    map.delete(owner);
+                    continue
+                }
+                const fn = map.get(owner)
+                if(ev.target==this&&!fn.listenChilds){
+                    fn.apply(owner,ev.args)
+                }else if(fn.listenChilds){
+                    fn.apply(owner,[ev])
+                }
             }
-            map.get(owner).apply(owner,args)
         }
+        !ev.pretend&&this['on_'+ev.name]?.apply(this,[ev])
+        if(ev.type=="bubble"){ev.child=this;this.parent?._emit(ev)}
+        if(ev.type=="dive"){for(const c of Object.values(this.childs)){c._emit(ev)}}
+    }
+    emit(name,args=[],opts){
+        const ev = {target:this,args,name,type:"bubble"}
+        if(opts){Object.assign(ev,opts)}
+        this._emit(ev)
     }
     removeListener(name,owner){
         const arr = this._events?.[name]
@@ -41,6 +58,7 @@ export class EventEmitter{
         arr.delete(owner)
     }
 }
+EventEmitter.prototype.e = e;
 export class MouseBufer extends EventEmitter{
     mouseNode = new Node('mouse_val')
     input=""
@@ -48,7 +66,12 @@ export class MouseBufer extends EventEmitter{
     static handlers = []
     index = 0
     setInput(val){this.input = val;this.changed();this.index=0}
-    setValue(value,name){this.input = name||"";this.variants.push({value});this.emit('changed',this,this)}
+    setValue(value,name){
+        this.input = name||"";
+        this.variants = [{value}]
+        this.index = 0;
+        this.emit('changed',this,this)
+    }
     getValue(){
         const val = this.selected?.value
         return val instanceof Node?val.target:val
@@ -72,7 +95,7 @@ export class MouseBufer extends EventEmitter{
             }
         }
         this.variants.sort((a,b)=>(b.order||0)-(a.order||0))
-        this.emit('changed',this,this)
+        this.emit('changed',[this,this])
     }
     constructor(){
         super()
@@ -105,6 +128,7 @@ export class MouseBufer extends EventEmitter{
 }
 export default class Node extends EventEmitter{
     static count = 0
+    static tmp = new Node('tempNode')
     constructor(name,par,target){
         super()
         this._id = idscounter++
@@ -131,7 +155,7 @@ export default class Node extends EventEmitter{
         proto.__proto__ = Node.prototype
         Proto.set(type,proto)
     }
-    childs={}
+    childs={};
     /**@returns {Node} */
     static fromPath(path){
         var node = Node.root
@@ -140,7 +164,6 @@ export default class Node extends EventEmitter{
             if(path.includes('/')){
                 const keys = path.split('/')
                 for(const key of keys){
-                    if(node==null)break
                     node = node.getChild(key)
                 }
             }else{node = node.getChild(path)}
@@ -159,7 +182,7 @@ export default class Node extends EventEmitter{
     }
     *getTypes(){
         let obj = this.target
-        if(obj==null)return obj;
+        if(obj==null)return [obj];
         while(obj!=null){
             yield obj.constructor
             obj = obj.__proto__
@@ -176,12 +199,17 @@ export default class Node extends EventEmitter{
             }
         }
     }
+    static find(obj,map,...args){Node.tmp.target = obj;return Node.tmp.find(map,...args)}
+    buildPath(){
+        //TODO create path to current Node
+    }
     get(name){}
     childNames(){
         return Object.getOwnPropertyNames(this.childs)
     }
     get self(){
         const value = new Node('~',this,this)
+        value.parent
         Object.defineProperty(this,'self',{value});
         return value; 
     }
@@ -201,33 +229,36 @@ export default class Node extends EventEmitter{
         this.childs[name] = childNode
         return childNode;
     }
-    changed(){this.parent?.changed(this)}
     update(val,caller){
-        this.target = val;
-        code.initFn.push(new code.Set(this.parent,this.name,this))
-        this.emit('changed',caller)
-        this.changed()
+        Node.tmp.target = val
+        if(this.parent){
+            this.parent.set(this.name,Node.tmp,caller)
+        }else{this.target = val;this.emit('changed',[caller])}
+        
     }
-    set(name,node){// TODO dont create new Node
-        const newNode = new Node(name,this,node.target)
-        code.initFn.push(new code.Set(this,name,node))
-        this.childs[name] = newNode
-        this.changed()
-        this.emit('childChanged',name)
-        return newNode
+    set(name,node,caller){// TODO dont create new Node
+        const child = this.getChild(name)
+        child.target = node.target
+        if(node!=Node.tmp){
+            const newChild = new Node(name,this,node.target)
+            this.childs[name] = newChild
+        }
+        child.emit('changed',[caller])
+        return child
     }
     add(name,val=null){
-        this.changed()
-        this.emit('childChanged',name)
-        this.emit('changed',null)
-        code.initFn.push(new code.Add(this,name,val))
+        const newChild = this.getChild(name)
+        newChild.emit('changed')
+        newChild.emit('added')
     }
     del(name){// TODO delete child
+        const delNode = this.childs[name]
         delete this.childs[name]
-        this.changed()
-        this.emit('childRemoved',name)
         this.emit('changed')
-        code.initFn.push(new code.Del(this,name))
+        if(delNode){
+            delNode.emit('deleted');
+            delNode.emit('deleted',[],{type:'dive'})
+        }
     }
 }
 MouseBufer.handlers.push(async (m)=>{
@@ -258,12 +289,7 @@ window.mouse = mouseBufer
 Node.mixin(EventEmitter)
 Node.extends(Object,{
     childNames(){return [...Object.getOwnPropertyNames(this.target),'__proto__']},
-    update(val,caller){
-        if(this.parent?.target){
-            this.parent.target[this.name] = val}
-        super.update(val,caller)
-    },
-    set(name,node){this.target[name] = node.target;super.set(name,node)},
+    set(name,node,c){this.target[name] = node.target;super.set(name,node,c)},
     add(name,val){this.target[name] = val;super.add(name,val)},
     del(name){delete this.target[name];super.del(name)},
     get(name){try{return this.target[name]}catch(e){return e}},
@@ -272,3 +298,10 @@ Node.extends(Array,{
     childNames(){const names = Object.getOwnPropertyNames(this.target);names.pop();return names},
     del(name){this.target.splice(parseInt(name),1);super.del(name)}
 })
+elConfig['nodeEvents'] = function(evts,{el}){
+	for(const name in evts){this.on(name,el,evts[name])}
+}
+elConfig['sync_changes'] = function(_,{el,src,cfg,args,ctx}){
+    this.on('changed',el,()=>{el.replaceWith(e(src,{...cfg,this:ctx},args))})
+}
+toEl.types.set(Map,(src,p)=>toEl(p.ctx.find(src,p.args),p))

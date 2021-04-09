@@ -1,5 +1,6 @@
 import Node, { Proto } from "./Node.js"
-import {Inline,Page,e,Icons} from "./BaseGUI.js"
+import {Inline,Page,Icons} from "./BaseGUI.js"
+import {e} from "./GUICore.js"
 export async function get(url,params=null,json=false){
 	if(params){url+='?'+ new URLSearchParams(params).toString()}
 	const ret = await fetch(url)
@@ -55,7 +56,7 @@ Node.extends(File,{
 	},
 	*getTypes(){yield this.target.ext;yield File;yield Object}
 })
-Icons.set(File,'icons/file.png')
+Icons.set(File,'/icons/file.png')
 Inline.set(File,function(){
 	return e('span',{},`File {${this.target.getSize()}}`)
 })
