@@ -152,28 +152,18 @@ css['.attr>.ico-box'] = {marginRight:3}
 /**@param {HTMLElement} $el */
 function addChangeEvents(node,$el,showName=true){
 	node.on('changed',$el,async (ev)=>{
-		if(!ev.child||ev.args[0]){return}
-		const newEl = AttrLineView(node,ev.child.name,showName)
+		if(!ev.child&&ev.args[2]){return}// update event
+		const deletion = ev.name=="del"&&!ev.child
+		const attr = ev.child?ev.child.name:ev.args[0]
+		const newEl = !deletion&&AttrLineView(node,attr,showName)
 		for(const el of $el.children){
-			if(el.name==ev.child.name){
-				if(newEl){
-					el.replaceWith(newEl)
-				}else{
-					$el.removeChild(el)
-				}
-				return
+			if(el.name==attr){
+				if(deletion){$el.removeChild(el)}
+				else{el.replaceWith(newEl)}	return
 			}
 		}
-		if($el.lastChild){
-			$el.lastChild.before(newEl)
-		}else{
-			$el.append(newEl)
-		}
-	},true)
-	node.on('deleted',$el,(ev)=>{
-		if(ev.target!=ev.child){return}
-		for(const el of $el.children){
-			if(el.name==ev.child.name){$el.removeChild(el)}}
+		if($el.lastChild){$el.lastChild.before(newEl)}
+		else{$el.append(newEl)}
 	},true)
 }
 async function BlockObject(){
@@ -221,7 +211,7 @@ function InlineString(){
 	}
 	const field = e('span',{onkeyup,attr:{contenteditable:true}},[this.target])
 	const nodeEvents = {
-		changed(caller){
+		update(caller){
 			if(caller==field)return
 			field.textContent = node.target
 		}
@@ -232,7 +222,7 @@ Block.set(String,function(){
 	const node = this
 	return this.e('textarea',{//TODO ERR doesnt update ERROR 
 		class:"str-inline",
-		nodeEvents:{changed(){console.log(node);this.value = node.target}},
+		nodeEvents:{update(cl){if(cl!=this){this.value = node.target}}},
 		value:this.target,
 		onkeyup(){
 			node.update(this.value,this)
@@ -260,7 +250,7 @@ function InlineNumber(){
 		},
 		attr:{contenteditable:true}
 	},[`${this.target}`])
-	this.on('changed',$ret,(caller)=>{
+	this.on('update',$ret,(caller)=>{
 		if(caller==$ret)return
 		num.textContent = `${this.target}`
 	})

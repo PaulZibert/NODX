@@ -12,10 +12,8 @@ export const WindowBrowser = {
         if(this.el){this.el.replaceWith(page);}
         this.el = page;
         if(save){history.pushState(null,node.name,node.path)}
-        node.on('changed',this.el,(ev)=>{
-            if(ev.target==node&&ev.args[0]==null&&node.parent){
-                this.open(node.parent.getChild(node.name),false)
-            }
+        node.on(['replaced','deleted'],this.el,(ev)=>{
+            this.open(ev.args[0]||ev.target.parent,false)
         },true)
         page.addEventListener('go',(e)=>{this.open(e.detail)})
     },
@@ -39,10 +37,8 @@ export class Browser{
         const page = node.find(Page)
         this.el.replaceWith(page);
         this.el = page;
-        node.on('changed',this.el,(ev)=>{
-            if(ev.target==node&&ev.args[0]==null&&node.parent){
-                this.open(node.parent.getChild(node.name),false)
-            }
+        node.on(['replaced','deleted'],this.el,(ev)=>{
+            this.open(ev.args[0]||ev.target.parent,false)
         },true)
         page.addEventListener('go',(e)=>{this.open(e.detail)})
     }
@@ -66,7 +62,7 @@ function MouseBuferView(mb){
         mouseEl.style.left = ev.x+10
         mouseEl.style.top = ev.y+10
     })
-    return e(mouseEl,{},[mb.e(contentView,{sync_changes:true})])
+    return e(mouseEl,{},[mb.e(contentView,{upd_evt:'changed'})])
 }
 css['.mouse-bufer'] = {
     position:"fixed",
@@ -99,7 +95,7 @@ function ToolBar(node){
             }
         })
     ])
-    return e('div',{class:"top-bar"},[node.e(nodeInfo,{sync_changes:true}),tools])
+    return e('div',{class:"top-bar"},[node.e(nodeInfo,{upd_evt:'update'}),tools])
 }
 css['.top-bar'] = {fontSize:30,
     borderBottom:borderStyle,
@@ -113,7 +109,7 @@ export default function env(){
     const path = e('div',{style:{width:"100%",marginLeft:5}})
     const backBtn = e('button',{onclick(){sideBrowser.back()},class:"sqr-btn"},['b'])
     const sidenav = e('div',{class:"tool-line"},[backBtn,path])
-    sideBrowser.node.on('changed',sidenav,function(){path.textContent = sideBrowser.node.target.path})
+    sideBrowser.node.on('update',sidenav,function(){path.textContent = sideBrowser.node.target.path})
     //setup sidePage
     sideBrowser.open(Node.root)
     const sidePage = e('div',{class:"sidepage"},[sidenav,sideBrowser.el])
