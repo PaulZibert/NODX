@@ -1,6 +1,7 @@
 import Node from "./Node.js"
 import {Icons,Inline,Page} from "./BaseGUI.js"
 import {e,toEl} from "./GUICore.js"
+import { initFn } from "./CodeManager.js"
 //#region localStorage
 Node.extends(Storage,{
     get(name){
@@ -122,20 +123,27 @@ Node.extends(IDBObjectStore,{
         this.emit('changed')
     },
     on_changed(ev){
-        if(!ev.child)return
+        const name = ev.child?ev.child.name:ev.args[0]
+        const val = ev.child?ev.child.target:ev.args[1]
         /**@type {IDBDatabase} */
         const db = this.target.transaction.db
         const store = db.transaction(this.name,'readwrite').objectStore(this.name)
-        store.put(ev.child.target,ev.child.name)
+        store.put(val,name)
     }
 })
 Node.extends(Promise,{
     async constructor(){
-        const result = await this.target
-        const replaceNode = new Node(this.name,this.parent,result)
-        replaceNode.childs = this.childs
-        this.parent.childs[this.name] = replaceNode
-        this.emit('changed',[],{pretend:true})
+        this.target = await this.target
+        this.setupProto()
+        this.parent.emit('changed',[],{pretend:true,child:this})
+        this.emit('replaced',[this],{type:"single"})
+        // const replaceNode = new Node(this.name,this.parent,result)
+        // for(const child of Object.values(this.childs)){
+        //     replaceNode.childs[child.name]=child;
+        //     child.parent=replaceNode}
+        // this.parent.childs[this.name] = replaceNode
+        // this.emit('changed',[],{pretend:true})
+        // this.emit('replaced',[replaceNode],{type:"single"})
     },
     async get(name){
         const result = await this.target;
@@ -144,11 +152,12 @@ Node.extends(Promise,{
     }
 })
 Inline.set(Promise,function(){
-    return e('span',{},['wait'])
+    return e('span',{},'wait')
 })
-Page.set(Promise,()=>e('div',{},['loading page...']))
-toEl.types.set(Promise,(prom,p)=>{
-	const tempEl = Node.find(prom,Inline);
-	prom.then((res)=>{tempEl.replaceWith(toEl(res,p))})
+Page.set(Promise,()=>e('div',{},'loading page...'))
+toEl.types.set(Promise,(prom,{cfg,ctx,args})=>{
+	const tempEl = Node.find(prom,Inline);cfg.this=ctx;
+	prom.then((res)=>{tempEl.replaceWith(e(res,cfg,...args))})
 	return tempEl
 })
+

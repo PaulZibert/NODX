@@ -1,21 +1,20 @@
-import Node from "./Node.js"
+import Node, { MouseBufer } from "./Node.js"
 Array.prototype.last = {last(){return this[this.length-1]}}.last
 export const AsyncFn = (async ()=>{}).constructor
-const saveJS = new Map()
-saveJS.set(Object,function(){return JSON.stringify(this.target)})
-saveJS.set(Array,function(){
+const Evaluable = new Map()
+Evaluable.set(Object,function(){return JSON.stringify(this.target)})
+Evaluable.set(Array,function(){
     const arr = this.target
-    return `[${arr.map((e,i)=>this.getChild(i).find(saveJS))}]`
+    return `[${arr.map((e,i)=>Node.find(e,Evaluable))}]`
 })
 export class Executable{
     exe(){}
 }
-saveJS.set(Executable,function(){
+Evaluable.set(Executable,function(){
     const obj = this.target
     const args = []
     for(const name of Object.getOwnPropertyNames(obj)){
-        const child = this.getChild(name)
-        args.push(child.find(saveJS))
+        args.push(Node.find(obj[name],Evaluable))
     }
     return `new ${obj.constructor.name}(${args.join(',')})`
 })
@@ -24,32 +23,39 @@ export class Link extends Executable{
     exe(){return Node.fromPath(this.path)}
 }
 export class Set extends Executable{
-    constructor(obj,name,val){super()
-        this.obj = obj;
+    constructor(path,name,val){super()
+        this.nodePath = path;
         this.name = name
         this.val = val;
     }
     exe(){
-        this.obj.setChild(this.name,this.val)
+        const node = Node.fromPath(this.nodePath)
+        let val = this.val
+        val = val instanceof Link?val.exe():Node.temp(val)
+        node.set(this.name,val)
     }
 }
 export class Add extends Executable{
-    constructor(obj,name,val){super()
-        this.obj = obj;
+    constructor(path,name,val){super()
+        this.nodePath = path;
         this.name = name
         this.val = val;
     }
     exe(){
-        this.obj.add(this.name,this.val)
+        const node = Node.fromPath(this.nodePath)
+        let val = this.val
+        if(val instanceof Link){val = val.exe()}
+        node.add(this.name,val)
     }
 }
 export class Del extends Executable{
     constructor(obj,name){super()
-        this.obj = obj;
+        this.nodePath = obj;
         this.name = name;
     }
-    exe(){this.obj.del(this.name)}
+    exe(){Node.fromPath(this.nodePath).del(this.name)}
 }
+const classes = {'del':Del,'add':Add,'set':Set}
 export class Function extends Executable{
     constructor(cmds = []){super();this.cmds = cmds}
     exe(){
@@ -58,7 +64,7 @@ export class Function extends Executable{
         }
     }
     push(cls,...args){
-        args = args.map(e=>e instanceof Node?new Link(e.path):e)
+        args = args.map(e=>e instanceof Node?e==Node.tmp?e.target:new Link(e.path):e)
         const cmd = new cls(...args)
         if(cls == Set){
             const lastCMD = this.cmds.last()
@@ -69,9 +75,27 @@ export class Function extends Executable{
         this.cmds.push(cmd)
     }
 }
-export const initFn = new Function()
-function genFn(){
-    const fnNode = new Node('',null,initFn)
-    return fnNode.find(saveJS)
+const evalFn = (code)=>eval(code)
+export var initFn = evalFn(localStorage.initFn||'')
+if(!(initFn instanceof Function)){initFn = new Function}
+Object.assign(window,{initFn,evalFn,saveJS: Evaluable})
+export function listen(node){
+    node.on('changed',initFn,(ev)=>{
+        if(ev.name=='changed')return
+        if(ev.child.name!="initFn"){
+            initFn.push(classes[ev.name],ev.target.path,...ev.args)
+        }
+        localStorage.initFn =  Node.find(initFn,Evaluable)
+    },true)
 }
-Object.assign(window,{initFn,genFn})
+MouseBufer.handlers.push((m)=>{
+    try{
+        const value = eval(m.input)
+        if(value===undefined)return
+        m.variants.push({
+            sufix:"",
+            order:3,
+            value
+        })
+    }catch(e){}
+})

@@ -1,4 +1,4 @@
-import * as code from "./CodeManager.js"
+
 import {e, toEl,elConfig} from "./GUICore.js"
 export const Proto = new Map()
 export function $(str,...args){
@@ -12,7 +12,6 @@ export function $(str,...args){
 }
 window.$ = $
 Function.prototype.mixin = function(mx){Object.assign(this.prototype,mx)}
-var idscounter = 0
 const Primitives = ['string','boolean','number']
 export class EventEmitter{
     on(names,owner,fn,listenChilds){
@@ -47,7 +46,7 @@ export class EventEmitter{
                     }
                 }
             }
-            !ev.pretend&&this['on_'+ev.name]?.apply(this,[ev])
+            !ev.pretend&&this['on_'+name]?.apply(this,[ev])
         }
         if(ev.type=="bubble"){ev.child=this;this.parent?._emit(ev)}
         if(ev.type=="dive"){for(const c of Object.values(this.childs)){c._emit(ev)}}
@@ -66,7 +65,6 @@ export class EventEmitter{
 }
 EventEmitter.prototype.e = e;
 export class MouseBufer extends EventEmitter{
-    mouseNode = new Node('mouse_val')
     input=""
     /**@type {Array<(mb:MouseBufer)=>null>}*/
     static handlers = []
@@ -90,8 +88,8 @@ export class MouseBufer extends EventEmitter{
     get node(){
         const val = this.selected?.value
         if(val===undefined||val instanceof Node){return val}
-        this.mouseNode.target = val
-        return this.mouseNode
+        Node.tmp.target = val
+        return Node.tmp
     }
     async changed(){
         this.variants = []
@@ -138,11 +136,13 @@ export default class Node extends EventEmitter{
     static tmp = new Node('tempNode')
     constructor(name,par,target){
         super()
-        this._id = idscounter++
-        Node.count++;
+        this._id = Node.count++;
         this.parent = par;
         this.name = name;
-        if(target!=null){this.target = target}
+        this.target = target
+        this.setupProto()
+    }
+    setupProto(){
         const proto = this.find(Proto)
         if(proto){
             this.__proto__ = proto
@@ -207,6 +207,7 @@ export default class Node extends EventEmitter{
         }
     }
     static find(obj,map,...args){Node.tmp.target = obj;return Node.tmp.find(map,...args)}
+    static temp(obj,name = "tmp"){Node.tmp.target = obj;Node.tmp.name = name;return Node.tmp}
     buildPath(){
         //TODO create path to current Node
     }
@@ -242,7 +243,6 @@ export default class Node extends EventEmitter{
             this.parent.set(this.name,Node.tmp,caller)
         }else{this.target = val;}
         this.emit('update',[caller],{type:"single"})
-        
     }
     set(name,node,caller){
         const oldChild = this.getChild(name)
@@ -250,8 +250,8 @@ export default class Node extends EventEmitter{
             const newChild = new Node(name,this,node.target)
             this.childs[name] = newChild;
             oldChild.emit('replaced',[newChild],{type:"dive"})
-        }else{oldChild.target = node.target}
-        this.emit('set',[name,node,caller])
+        }else{oldChild.target = node.target;}
+        this.emit('set',[name,node,caller],{child:this.childs[name]})
         return oldChild
     }
     add(name,val=null){

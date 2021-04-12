@@ -54,7 +54,7 @@ function MouseBuferView(mb){
         var node = this.node
         mouseEl.style.display = selected?null:"none"
         if(!selected||!node){return e('span')}
-        const name = e('header',{},[this.input,e('span',{},selected.sufix)])
+        const name = e('header',{},[this.input,e('span',{},selected.sufix||"")])
         const inline = node.find(Inline)
         return e('div',{},[name,inline])
     }

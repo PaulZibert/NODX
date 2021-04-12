@@ -152,7 +152,7 @@ css['.attr>.ico-box'] = {marginRight:3}
 /**@param {HTMLElement} $el */
 function addChangeEvents(node,$el,showName=true){
 	node.on('changed',$el,async (ev)=>{
-		if(!ev.child&&ev.args[2]){return}// update event
+		if(ev.target!=node||(ev.args[2]&&ev.name=="set")){return}// update event
 		const deletion = ev.name=="del"&&!ev.child
 		const attr = ev.child?ev.child.name:ev.args[0]
 		const newEl = !deletion&&AttrLineView(node,attr,showName)
@@ -235,7 +235,7 @@ Inline.set(String,InlineString)
 MouseBufer.handlers.push((m)=>{
 	m.variants.push({
 		sufix:"",
-		order:3,
+		order:2,
 		value:m.input
 	})
 })
