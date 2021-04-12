@@ -35,7 +35,7 @@ export class Set extends Executable{
         node.set(this.name,val)
     }
 }
-export class Add extends Executable{
+export class AddAttr extends Executable{
     constructor(path,name,val){super()
         this.nodePath = path;
         this.name = name
@@ -55,7 +55,7 @@ export class Del extends Executable{
     }
     exe(){Node.fromPath(this.nodePath).del(this.name)}
 }
-const classes = {'del':Del,'add':Add,'set':Set}
+const events = {'del':Del,'add':AddAttr,'set':Set}
 export class Function extends Executable{
     constructor(cmds = []){super();this.cmds = cmds}
     exe(){
@@ -75,7 +75,7 @@ export class Function extends Executable{
         this.cmds.push(cmd)
     }
 }
-const evalFn = (code)=>eval(code)
+const evalFn = (code)=>{try{return eval(code)}catch{}}
 export var initFn = evalFn(localStorage.initFn||'')
 if(!(initFn instanceof Function)){initFn = new Function}
 Object.assign(window,{initFn,evalFn,saveJS: Evaluable})
@@ -83,7 +83,7 @@ export function listen(node){
     node.on('changed',initFn,(ev)=>{
         if(ev.name=='changed')return
         if(ev.child.name!="initFn"){
-            initFn.push(classes[ev.name],ev.target.path,...ev.args)
+            initFn.push(events[ev.name],ev.target.path,...ev.args)
         }
         localStorage.initFn =  Node.find(initFn,Evaluable)
     },true)

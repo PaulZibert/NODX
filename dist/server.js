@@ -6,6 +6,13 @@ export async function get(url,params=null,json=false){
 	const ret = await fetch(url)
 	return json?ret.json():ret.text()
 }
+export async function post(url,params=null){
+	return await (await fetch(url,{
+        body:JSON.stringify(params),
+        headers:{'Content-Type': 'application/json'},
+        method:"post",
+    })).text()
+}
 export class File{
 	constructor(path,info){
 		this.ext = path.split('.').last()
@@ -54,7 +61,7 @@ Node.extends(File,{
 			if(proto.hasOwnProperty('constructor')){proto.constructor.apply(this)}
 		}
 	},
-	*getTypes(){yield this.target.ext;yield File;yield Object}
+	*getTypes(){yield this.target.ext;yield File;yield Object},
 })
 Icons.set(File,'/icons/file.png')
 Inline.set(File,function(){
@@ -62,12 +69,18 @@ Inline.set(File,function(){
 })
 Node.extends("json",{	
 	async childNames(){
-		if(this.contnent==null){this.contnent = JSON.parse(await this.target.text())}
-		return Object.keys( await this.contnent)
+		if(this.content==null){this.content = JSON.parse(await this.target.text())}
+		return Object.keys( await this.content)
 	},
 	async get(name){
-		if(this.contnent==null){this.contnent = JSON.parse(await this.target.text())}
-		return await (this.contnent)[name]
+		if(this.content==null){this.content = JSON.parse(await this.target.text())}
+		return await (this.content)[name]
+	},
+	on_changed(ev){
+		if(this.content!=null){
+			const data = JSON.stringify(this.content)
+			post('/api/save',{path:this.target.path,data})
+		}
 	}
 },File)
 Icons.set('json','/icons/json.png')

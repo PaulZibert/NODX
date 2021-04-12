@@ -74,7 +74,7 @@ export class MouseBufer extends EventEmitter{
         this.input = name||"";
         this.variants = [{value}]
         this.index = 0;
-        this.emit('changed',this,this)
+        this.emit('changed',[this,this])
     }
     getValue(){
         const val = this.selected?.value
@@ -116,10 +116,10 @@ export class MouseBufer extends EventEmitter{
             }else if(ev.key=="ArrowUp"){
                 this.index-=1;
                 if(this.index<0){this.index = this.variants.length}
-                this.emit('changed',this,this)
+                this.emit('changed',[this,this])
             }else if(ev.key=="ArrowDown"){
                 this.index =(this.index+1)%this.variants.length
-                this.emit('changed',this,this)
+                this.emit('changed',[this,this])
             }
             else if(ev.key=="Tab"){
                 if(this.input)

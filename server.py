@@ -1,6 +1,6 @@
 import json
 from os import listdir,path
-from os.path import join,getsize,isdir
+from os.path import join,getsize,isdir,exists
 from flask import Flask,request
 PATH = path.dirname(__file__)
 app = Flask(__name__,static_folder='dist',static_url_path='/')
@@ -25,6 +25,13 @@ def getDir():
         ret[el] = {'isFile':isFile}
         if isFile:ret[el]['size'] = getsize(elPath)
     return json.dumps(ret)
+@app.route('/api/save',methods=['POST'])
+def saveFile():
+    path = join(PATH,'dist')+request.json['path']
+    if not exists(path):return "not exists"
+    with open(path,'w') as f:
+        f.write(request.json['data'])
+    return 'ok'
 
 if(__name__=="__main__"):
     app.run('::',2020,debug=True)

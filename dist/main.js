@@ -16,7 +16,7 @@ var root = {
 }
 Node.root = new Node('',null,root)
 initFn.exe()
-listen(Node.root)
+//listen(Node.root)
 document.body.append(defEnv())
 updateStyle()
 window.Node = Node
